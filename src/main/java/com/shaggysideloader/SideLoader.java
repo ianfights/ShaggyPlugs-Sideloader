@@ -4,6 +4,9 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.utils.IOUtils;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -25,6 +28,8 @@ public class SideLoader extends JFrame {
     private final JTextField portField;
     private final JTextField usernameField;
     private final JPasswordField passwordField;
+
+    private final JTextField clientsField;
     private final JButton loginButton;
 
     private final JButton installJagexPatchButton;
@@ -48,6 +53,8 @@ public class SideLoader extends JFrame {
         UIManager.put("TextField.foreground", Color.WHITE);
         UIManager.put("PasswordField.background", new Color(54, 57, 62));
         UIManager.put("PasswordField.foreground", Color.WHITE);
+        UIManager.put("ClientsButton.background", new Color(54, 57, 62));
+        UIManager.put("ClientsButton.foreground", Color.WHITE);
         UIManager.put("Button.background", new Color(47, 102, 153));
         UIManager.put("Button.foreground", Color.WHITE);
 
@@ -68,6 +75,9 @@ public class SideLoader extends JFrame {
         passwordField = new JPasswordField();
         passwordField.setPreferredSize(new Dimension(200, 30));
 
+        clientsField = new JTextField();
+        clientsField.setPreferredSize(new Dimension(200, 30));
+
         // Create the login button
         loginButton = new JButton("Login");
         loginButton.addActionListener(e -> {
@@ -75,25 +85,25 @@ public class SideLoader extends JFrame {
             String port = portField.getText();
             String username = usernameField.getText();
             String password = new String(passwordField.getPassword());
-
-            saveProxyToFile(address, port, username, password);
-                try {
-                    dispose();
-                    launchRuneLite();
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
+            String clientsPerProxy = clientsField.getText();
+            saveProxyToFile(address, port, username, password, clientsPerProxy);
+//                try {
+//                    dispose();
+//                    launchRuneLite();
+//                } catch (IOException ex) {
+//                    throw new RuntimeException(ex);
+//                }
         });
 
         noproxyButton = new JButton("Login without Proxy");
         noproxyButton.addActionListener(e -> {
          deleteProxyFile();
-         try {
-                    dispose();
-                    launchRuneLite();
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
+//         try {
+//                    dispose();
+//                    launchRuneLite();
+//                } catch (IOException ex) {
+//                    throw new RuntimeException(ex);
+//                }
 
             });
 
@@ -145,6 +155,8 @@ public class SideLoader extends JFrame {
         panel.add(new JLabel("Username:"), gbc);
         gbc.gridy++;
         panel.add(new JLabel("Password:"), gbc);
+        gbc.gridy++;
+        panel.add(new JLabel("Clients Per Proxy:"), gbc);
 
         gbc.gridx = 1;
         gbc.gridy = 0;
@@ -160,7 +172,8 @@ public class SideLoader extends JFrame {
         panel.add(usernameField, gbc);
         gbc.gridy++;
         panel.add(passwordField, gbc);
-
+        gbc.gridy++;
+        panel.add(clientsField, gbc);
 
         gbc.gridx = 0;
         gbc.gridy++;
@@ -180,11 +193,12 @@ public class SideLoader extends JFrame {
         panel.add(uninstallJagexPatchButton, gbc);
         // Load the saved auth key and proxy configuration
         try {
-            String[] proxy = readProxyFromFile(System.getProperty("user.home") + File.separator + "jdk" + File.separator + "proxy.txt");
-            addressField.setText(proxy[0]);
-            portField.setText(proxy[1]);
-            usernameField.setText(proxy[2]);
-            passwordField.setText(proxy[3]);
+            JSONObject proxy = readProxyFromFile(System.getProperty("user.home") + File.separator + "jdk" + File.separator + "proxy.json");
+            addressField.setText(proxy.getString("host"));
+            portField.setText(proxy.getString("port"));
+            usernameField.setText(proxy.getString("username"));
+            passwordField.setText(proxy.getString("password"));
+            clientsField.setText(proxy.getJSONObject("config").getString("clients-per-proxy"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -193,7 +207,7 @@ public class SideLoader extends JFrame {
     public void dispose() {
         super.dispose();
     }
-    private static String[] readProxyFromFile(String filePath) throws IOException {
+    private static JSONObject readProxyFromFile(String filePath) throws IOException {
         File file = new File(filePath);
         System.out.println(filePath);
         if (!file.exists()) {
@@ -201,22 +215,57 @@ public class SideLoader extends JFrame {
             file.createNewFile();
         }
         BufferedReader reader = new BufferedReader(new FileReader(file));
-        String[] proxy = new String[4];
-        for (int i = 0; i < 4; i++) {
-            proxy[i] = reader.readLine();
+
+
+        StringBuffer buffer = new StringBuffer();
+        while (true) {
+            String line;
+            try {
+                line = reader.readLine();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            if (line == null) {
+                break;
+            } else {
+                buffer.append(line);
+                buffer.append("\n");
+            }
         }
+
+        JSONObject json = new JSONObject(buffer.toString());
+        JSONArray proxies = json.getJSONArray("proxies");
+        JSONObject proxy = proxies.getJSONObject(0);
+        proxy.put("config",json.getJSONObject("config"));
+
+//        System.out.println(reader.lines().toString());
         reader.close();
         return proxy;
+//        return void;
     }
     private void deleteProxyFile() {
-        String proxyFilePath = System.getProperty("user.home") + File.separator + File.separator + "jdk" + File.separator + "proxy.txt";
+        // We need to check for the old proxy in order to prevent some weird issues
+        String oldProxyFilePath = System.getProperty("user.home") + File.separator + File.separator + "jdk" + File.separator + "proxy.txt";
+        String proxyFilePath = System.getProperty("user.home") + File.separator + File.separator + "jdk" + File.separator + "proxy.json";
+
+        File oldProxyFile = new File(oldProxyFilePath);
         File proxyFile = new File(proxyFilePath);
+
+        if (oldProxyFile.exists()) {
+            boolean deleted = oldProxyFile.delete();
+            if (!deleted) {
+                System.out.println("Failed to delete the depricated proxy file.");
+            }
+        }
+
         if (proxyFile.exists()) {
             boolean deleted = proxyFile.delete();
             if (!deleted) {
-                System.out.println("Failed to delete the proxy file.");
+                System.out.println("Failed to delete the depricated proxy file.");
             }
         }
+
+
     }
 
     private void launchRuneLite() throws IOException {
@@ -621,18 +670,36 @@ public class SideLoader extends JFrame {
     }
 
 
-    public static void saveProxyToFile(String host, String port, String username, String password) {
+    public static void saveProxyToFile(String host, String port, String username, String password, String clientsField) {
         try {
-            File file = new File(System.getProperty("user.home") + File.separator + "jdk" + File.separator + "proxy.txt");
+            File file = new File(System.getProperty("user.home") + File.separator + "jdk" + File.separator + "proxy.json");
             if (!file.exists()) {
                 file.createNewFile();
             }
 
             FileWriter writer = new FileWriter(file);
-            writer.write(host + "\n");
-            writer.write(port + "\n");
-            writer.write(username + "\n");
-            writer.write(password);
+
+            JSONObject proxiesObjectFile = new JSONObject();
+            JSONObject launcherConfig = new JSONObject();
+            JSONArray proxies = new JSONArray();
+
+            launcherConfig.put("clients-per-proxy", clientsField);
+            proxiesObjectFile.put("config",launcherConfig);
+
+            JSONObject proxy = new JSONObject();
+            proxy.put("host",host);
+            proxy.put("port", port);
+            proxy.put("username", username);
+            proxy.put("password", password);
+
+            proxies.put(proxy);
+            proxiesObjectFile.put("proxies", proxies);
+            writer.write(proxiesObjectFile.toString());
+
+//            writer.write(host + "\n");
+//            writer.write(port + "\n");
+//            writer.write(username + "\n");
+//            writer.write(password);
             writer.close();
         } catch (IOException e) {
             e.printStackTrace();
