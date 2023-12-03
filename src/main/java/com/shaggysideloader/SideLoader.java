@@ -87,23 +87,23 @@ public class SideLoader extends JFrame {
             String password = new String(passwordField.getPassword());
             String clientsPerProxy = clientsField.getText();
             saveProxyToFile(address, port, username, password, clientsPerProxy);
-//                try {
-//                    dispose();
-//                    launchRuneLite();
-//                } catch (IOException ex) {
-//                    throw new RuntimeException(ex);
-//                }
+                try {
+                    dispose();
+                    launchRuneLite();
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
         });
 
         noproxyButton = new JButton("Login without Proxy");
         noproxyButton.addActionListener(e -> {
          deleteProxyFile();
-//         try {
-//                    dispose();
-//                    launchRuneLite();
-//                } catch (IOException ex) {
-//                    throw new RuntimeException(ex);
-//                }
+         try {
+                    dispose();
+                    launchRuneLite();
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
 
             });
 
@@ -238,10 +238,8 @@ public class SideLoader extends JFrame {
         JSONObject proxy = proxies.getJSONObject(0);
         proxy.put("config",json.getJSONObject("config"));
 
-//        System.out.println(reader.lines().toString());
         reader.close();
         return proxy;
-//        return void;
     }
     private void deleteProxyFile() {
         // We need to check for the old proxy in order to prevent some weird issues
